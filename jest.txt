@@ -1,0 +1,160 @@
+import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { AttorneyLawFirmDetailComponent } from "./attorney-law-firm-detail.component";
+import { BrowserAnimationsModule, NoopAnimationsModule } from "@angular/platform-browser/animations";
+import { ReactiveFormsModule } from "@angular/forms";
+import { provideHttpClient } from "@angular/common/http";
+import { AttorneyLawfirmService } from "app/services/referenceinformation/AttorneyLawFirm/attorney-law-firm.service";
+import { of } from "rxjs";
+import { MatDialog } from "@angular/material/dialog";
+import { ActivatedRoute, Router, convertToParamMap } from "@angular/router";
+import { NgxsModule, Store } from "@ngxs/store";
+import { ConversationState } from "app/state/conversation/conversation.state";
+import { AuthorizationDataService } from "app/services/common/AuthorizationDataService/authorization-data.service";
+import { NonStaticReferenceDataService } from "app/services/ReferenceDataService/non-static-reference-data.service";
+import { PullBackConversationState } from "app/state/pull-back-conversation/pull-back-conversation.state";
+import { ReferenceDataState } from "app/state/reference-data.state";
+import { IfAuthorizedDirective } from "app/directives/if-authorized.directive";
+import { UspsAddressConfirmationComponent } from "app/common/usps-address-confirmation/usps-address-confirmation.component";
+
+const mockActivatedRoute = {
+  queryParamMap: of(convertToParamMap({ lawFirmId: "12345", navigateToSelf: "true" })),
+  queryParams: of({ lawFirmId: "12345" })
+};
+
+const mockAttorneyDetail = {
+  responseGetAttorneyDetail: {
+    lawFirmId: "12345",
+    attorneyFirstName: "John",
+    attorneyLastName: "Doe"
+  }
+};
+
+const mockSaveResponse = {
+  response: {
+    errorMessage: null,
+    successMessage: "info.success.update",
+    pageDto: [{ addressUSPSValidatedOnPage: true }]
+  }
+};
+
+describe("AttorneyLawFirmDetailComponent", () => {
+  let component: AttorneyLawFirmDetailComponent;
+  let fixture: ComponentFixture<AttorneyLawFirmDetailComponent>;
+  let router: Router;
+  let dialog: MatDialog;
+  let store: Store;
+  let attorneyService: jest.Mocked<AttorneyLawfirmService>;
+  let authService: jest.Mocked<AuthorizationDataService>;
+  let nonReferenceService: jest.Mocked<NonStaticReferenceDataService>;
+
+  const mockService = {
+    getAttorneyDetail: jest.fn(),
+    saveAttorneyDetail: jest.fn()
+  };
+
+  const mockAuthService = {
+    authLevel: jest.fn(),
+    getAuthForUrl: jest.fn()
+  };
+
+  const mockStaticRef = { getDisplayName: jest.fn(), getName: jest.fn() };
+
+  const dialogRefMock = {
+    afterClosed: jest.fn().mockReturnValue(of({ event: "OK", data: "mockData" })),
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [
+        ReactiveFormsModule,
+        BrowserAnimationsModule,
+        NoopAnimationsModule,
+        NgxsModule.forRoot([ConversationState, PullBackConversationState, ReferenceDataState]),
+      ],
+      declarations: [AttorneyLawFirmDetailComponent, IfAuthorizedDirective],
+      providers: [
+        provideHttpClient(),
+        { provide: AttorneyLawfirmService, useValue: mockService },
+        { provide: NonStaticReferenceDataService, useValue: mockStaticRef },
+        { provide: AuthorizationDataService, useValue: mockAuthService },
+        { provide: ActivatedRoute, useValue: mockActivatedRoute },
+        { provide: MatDialog, useValue: { open: jest.fn().mockReturnValue(dialogRefMock) } },
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(AttorneyLawFirmDetailComponent);
+    component = fixture.componentInstance;
+
+    // Inject services and mocks
+    attorneyService = TestBed.inject(AttorneyLawfirmService) as jest.Mocked<AttorneyLawfirmService>;
+    authService = TestBed.inject(AuthorizationDataService) as jest.Mocked<AuthorizationDataService>;
+    nonReferenceService = TestBed.inject(NonStaticReferenceDataService) as jest.Mocked<NonStaticReferenceDataService>;
+    dialog = TestBed.inject(MatDialog);
+    store = TestBed.inject(Store);
+    router = TestBed.inject(Router);
+
+    // Mock return values for services
+    attorneyService.getAttorneyDetail.mockReturnValue(of(mockAttorneyDetail));
+    attorneyService.saveAttorneyDetail.mockReturnValue(of(mockSaveResponse));
+    authService.authLevel.mockReturnValue("edit");
+    nonReferenceService.getDisplayName.mockReturnValue(of("TESTUSER"));
+  });
+
+  it("should create the component", () => {
+    expect(component).toBeTruthy();
+  });
+
+  it("should check form controls", () => {
+    component.ngOnInit(); // Initialize form
+    const formControls = component.attorneyDetailForm.controls;
+
+    expect(formControls["attorneyLastName"]).toBeDefined();
+    expect(formControls["attorneyFirstName"]).toBeDefined();
+    expect(formControls["attorneyPhoneNumber"]).toBeDefined();
+    expect(formControls["emailAddress"]).toBeDefined();
+  });
+
+  it("should get attorney details on init", () => {
+    const spy = jest.spyOn(attorneyService, "getAttorneyDetail");
+    component.ngOnInit();
+    expect(spy).toHaveBeenCalled();
+    expect(component.attorneyDetailForm.get("attorneyLastName").value).toBe("Doe");
+  });
+
+  it("should disable attorneyTypeCode when mode is view", () => {
+    component.mode = "view";
+    component.setFormValues(mockAttorneyDetail.responseGetAttorneyDetail);
+    expect(component.attorneyDetailForm.get("attorneyTypeCode").disabled).toBeTruthy();
+  });
+
+  it("should call saveAttorneyDetail on form submit", () => {
+    component.attorneyDetailForm.patchValue({
+      attorneyLastName: "Doe",
+      attorneyFirstName: "John"
+    });
+    component.submitAttorneyDetailForm("save");
+
+    expect(attorneyService.saveAttorneyDetail).toHaveBeenCalledWith(expect.anything());
+  });
+
+  it("should call openAddressConfirmation on form submit if USPS validation needed", () => {
+    const spyOpenDialog = jest.spyOn(component, "openAddressConfirmation");
+    const mockResponse = {
+      response: {
+        errorMessage: null,
+        successMessage: "info.success.update",
+        pageDto: [{ addressUSPSValidatedOnPage: false }]
+      }
+    };
+    attorneyService.saveAttorneyDetail.mockReturnValue(of(mockResponse));
+
+    component.submitAttorneyDetailForm("save");
+    expect(spyOpenDialog).toHaveBeenCalled();
+  });
+
+  it("should route to search page on cancel", () => {
+    const routerSpy = jest.spyOn(router, "navigateByUrl");
+    component.onCancelClicked();
+    expect(routerSpy).toHaveBeenCalledWith("/search");
+  });
+});
