@@ -106,3 +106,27 @@ ObjectMapper objectMapper = new ObjectMapper();
 </body>
 </html>
 
+
+    for (const [index, row] of jsonData.entries()) {
+          const firstName = row['First Name'];
+          const lastName = row['Last Name'];
+          const password = row['Password'];
+          const email = row['Email'];
+          const employeeId = row['Employee Id'];
+
+          if (!firstName || !lastName || !password || !email || !employeeId) {
+            console.error(`Row ${index + 1} is missing required fields.`);
+            return;  
+          }
+
+          userModelList.push({
+            firstName,
+            lastName,
+            password,
+            email,
+            employeeId,
+            environmentName: 'GSNET.lab' 
+          });
+        }
+
+
