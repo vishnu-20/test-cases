@@ -1,132 +1,84 @@
-<script>
-  document.getElementById('uploadForm').addEventListener('submit', function (event) {
-    event.preventDefault();
-
-    const fileUpload = document.getElementById('fileUpload').files[0]; 
-    if (fileUpload) {
-      const reader = new FileReader(); 
-
-      reader.onload = function (event) {
-        const data = new Uint8Array(event.target.result); 
-        const workbook = XLSX.read(data, { type: 'array' }); 
-
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        const userModelList = jsonData.map(row => ({
-          firstName: row['First Name'] || null,
-          lastName: row['Last Name'] || null,
-          password: row['Password'] || null,
-          email: row['Email'] || null,
-          employeeId: row['Employee Id'] || null,
-          environmentName: 'GSNET.lab' 
-        }));
-
-        const jsonString = JSON.stringify(userModelList);
-
-        document.getElementById('jsonData').value = jsonString;
-
-        document.getElementById('uploadForm').submit(); 
-      };
-
-      reader.readAsArrayBuffer(fileUpload);
-    } else {
-      alert("Please select a file first.");
-    }
-  });
-</script>
-
-
-<form id="uploadForm" action="/bulkUserCreationInAD" method="POST">
-  <div class="form-group">
-    <label for="file">File</label>
-    <input type="file" class="form-control-file" name="file" id="fileUpload" accept=".xlsx" aria-describedby="fileHelp">
-    <small id="fileHelp" class="form-text text-muted">Upload only .xlsx file</small>
-  </div>
-  <input type="hidden" name="jsonData" id="jsonData">
-  
-  <button type="submit" class="btn btn-primary">Submit</button>
-</form>
-
-
-ObjectMapper objectMapper = new ObjectMapper();
-    List<ActiveDirectoryUserModel> userModels;
-        userModels = objectMapper.readValue(jsonData, new TypeReference<List<ActiveDirectoryUserModel>>() {});
-
-
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <title>BulkUser Creation in AD</title>
-</head>
-<body>
-    <div layout:fragment="content">
-        <h2>Upload .XLSX file to Create Users in AD</h2>
-        <form id="uploadForm" th:action="@{/bulkUserCreationInAD}" method="POST" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="file">File</label>
-                <input type="file" class="form-control-file" name="file" id="fileUpload" accept=".xlsx">
-                <small>Upload only .xlsx file</small>
-            </div>
-            <button type="submit">Submit</button>
-        </form>
-
-        <!-- Table for displaying the response -->
-        <h3>Result</h3>
-        <table id="resultTable" border="1" style="width: 100%;" th:if="${users}">
-            <thead>
-                <tr>
-                    <th>User Name</th>
-                    <th>Password</th>
-                    <th>First Name</th>
-                    <th>Last Name</th>
-                    <th>Email</th>
-                    <th>Employee ID</th>
-                    <th>Environment Name</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Loop through the list of users and display in rows -->
-                <tr th:each="user : ${users}">
-                    <td th:text="${user.userName}"></td>
-                    <td th:text="${user.password}"></td>
-                    <td th:text="${user.firstName}"></td>
-                    <td th:text="${user.lastName}"></td>
-                    <td th:text="${user.email}"></td>
-                    <td th:text="${user.employeeId}"></td>
-                    <td th:text="${user.environmentName}"></td>
-                </tr>
-            </tbody>
-        </table>
-
-       
-    </div>
-</body>
-</html>
-
-
-    for (const [index, row] of jsonData.entries()) {
-          const firstName = row['First Name'];
-          const lastName = row['Last Name'];
-          const password = row['Password'];
-          const email = row['Email'];
-          const employeeId = row['Employee Id'];
-
-          if (!firstName || !lastName || !password || !email || !employeeId) {
-            console.error(`Row ${index + 1} is missing required fields.`);
-            return;  
-          }
-
-          userModelList.push({
-            firstName,
-            lastName,
-            password,
-            email,
-            employeeId,
-            environmentName: 'GSNET.lab' 
-          });
+ console.log("Started processing");
+    document.getElementById('uploadForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        const fileUpload = document.getElementById('fileUpload').files[0];
+        if (fileUpload) {
+            console.log("---------filename---------", fileUpload.name);
+            const reader = new FileReader();
+    
+            reader.onload = function (event) {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+    
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                const dataSize = jsonData.length;
+                console.log(dataSize);
+    
+                let missingFieldsSummary = ""; 
+    
+                if (dataSize <= 50) {
+                    const userModelList = [];
+    
+                    for (const [index, row] of jsonData.entries()) {
+                        const missingFields = []; 
+    
+                        const userName = row['User Name'];
+                        const firstName = row['First Name'];
+                        const lastName = row['Last Name'];
+                        const password = row['Password'];
+                        const email = row['Email'];
+                        const employeeId = row['Employee Id'];
+                        const manager = row['Manager'];
+                        const groupNamesList = row['Group Names List'];
+    
+                        // Check for missing fields and accumulate them
+                        if (!firstName) missingFields.push("First Name");
+                        if (!lastName) missingFields.push("Last Name");
+                        if (!password) missingFields.push("Password");
+                        if (!email) missingFields.push("Email");
+                        if (!employeeId) missingFields.push("Employee ID");
+                        if (!groupNamesList) missingFields.push("Group Names List");
+    
+                        // If there are missing fields, log the index and field names
+                        if (missingFields.length > 0) {
+                            missingFieldsSummary += `Row ${index + 1}: Missing fields - ${missingFields.join(", ")}\n`;
+                        } else {
+                            // Only push valid entries to the userModelList
+                            userModelList.push({
+                                userName,
+                                firstName,
+                                lastName,
+                                password,
+                                email,
+                                employeeId,
+                                manager,
+                                groupNamesList,
+                                environmentName: 'GSMNET_lab'
+                            });
+                        }
+                    }
+    
+                    if (missingFieldsSummary) {
+                        console.error("Missing fields:\n" + missingFieldsSummary);
+                        alert("Missing fields:\n" + missingFieldsSummary);
+                    } else {
+                        // If no missing fields, proceed with form submission
+                        const jsonString = JSON.stringify(userModelList);
+                        document.getElementById('jsonData').value = jsonString;
+                        document.getElementById('uploadForm').submit();
+                    }
+                } else {
+                    const errorMsg = "<h2 color='red'>Please provide an input of only 50 users at a time</h2>";
+                    document.getElementById('container').innerHTML = errorMsg;
+                    alert("Please provide an input of only 50 users at a time");
+                }
+            };
+    
+            reader.readAsArrayBuffer(fileUpload);
+            console.log("Upload done");
+        } else {
+            alert("Please select a file first.");
         }
-
-
+    });
